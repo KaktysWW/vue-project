@@ -58,8 +58,12 @@
       </aside>
 
       <section class="catalog-content">
-        <h2 class="section-title">Каталог смартфонов</h2>
+        <h2 class="section-title">
+          {{ route.query.search ? 'Результаты поиска: ' + route.query.search : 'Каталог смартфонов' }}
+        </h2>
+        
         <div v-if="loading" class="status">Загрузка...</div>
+        <div v-else-if="products.length === 0" class="status">Товары не найдены</div>
         <div v-else class="products-grid">
           <ProductCard 
             v-for="p in products" 
@@ -93,12 +97,16 @@ const filters = ref({
   maxPrice: '',
   brands: [], 
   storage: [], 
-  ram: []
+  ram: [],
+  search: '' // Добавили поле поиска в фильтры
 });
 
 const loadProducts = async () => {
   loading.value = true;
   const p = new URLSearchParams();
+  
+  // Добавляем поиск в параметры запроса к PHP
+  if (route.query.search) p.append('search', route.query.search);
   
   if (filters.value.minPrice) p.append('min_price', filters.value.minPrice);
   if (filters.value.maxPrice) p.append('max_price', filters.value.maxPrice);
@@ -111,20 +119,19 @@ const loadProducts = async () => {
     products.value = await res.json();
   } catch (err) {
     console.error("Ошибка загрузки:", err);
+    products.value = []; // Очищаем список при ошибке
   } finally { 
     loading.value = false; 
   }
 };
 
 const resetFilters = () => {
-  filters.value = { minPrice: '', maxPrice: '', brands: [], storage: [], ram: [] };
+  filters.value = { minPrice: '', maxPrice: '', brands: [], storage: [], ram: [], search: '' };
   loadProducts();
 };
 
-// Функция для синхронизации фильтров с URL
 const syncFiltersWithQuery = () => {
   if (route.query.brand) {
-    // Если в URL есть бренд, добавляем его в массив фильтров
     filters.value.brands = [route.query.brand];
   }
 };
@@ -134,7 +141,11 @@ onMounted(() => {
   loadProducts();
 });
 
-// Следим за изменениями в URL, если пользователь переходит по брендам, уже будучи в каталоге
+// Критично: Следим за поиском! Если в URL меняется поиск, загружаем заново
+watch(() => route.query.search, () => {
+  loadProducts();
+});
+
 watch(() => route.query.brand, () => {
   syncFiltersWithQuery();
   loadProducts();
@@ -144,24 +155,19 @@ watch(() => route.query.brand, () => {
 <style scoped>
 .catalog-page { background: #f6f3ee; padding: 40px 0; min-height: 100vh; font-family: Arial, sans-serif; }
 .catalog-container { display: flex; gap: 30px; max-width: 1200px; margin: 0 auto; align-items: flex-start; }
-
 .filters-sidebar { width: 280px; flex-shrink: 0; background: white; padding: 20px; border-radius: 12px; position: sticky; top: 100px; }
 .filter-title { margin-bottom: 20px; font-size: 20px; }
-
 .filter-group { border-bottom: 1px solid #f0f0f0; padding-bottom: 15px; margin-bottom: 15px; }
 .accordion-header { display: flex; justify-content: space-between; cursor: pointer; }
 .accordion-header h4 { font-size: 14px; margin: 0; font-weight: bold; }
 .arrow { transition: 0.3s; color: #999; }
 .arrow.rotate { transform: rotate(180deg); }
 .accordion-content { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
-
 .price-inputs { display: flex; gap: 5px; margin-top: 10px; }
 .price-inputs input { width: 50%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
-
 .check-row { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 .apply-btn { width: 100%; background: #e6652f; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
 .reset-btn { width: 100%; background: none; border: none; color: #999; margin-top: 10px; cursor: pointer; text-decoration: underline; font-size: 12px; }
-
 .catalog-content { flex-grow: 1; }
 .section-title { margin-bottom: 25px; font-size: 24px; }
 .products-grid { 
@@ -169,4 +175,5 @@ watch(() => route.query.brand, () => {
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
   gap: 20px; 
 }
+.status { padding: 20px; text-align: center; color: #666; font-size: 18px; }
 </style>
